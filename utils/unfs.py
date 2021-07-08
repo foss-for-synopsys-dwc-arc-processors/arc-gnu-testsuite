@@ -6,12 +6,11 @@ from utils import get_free_port
 
 
 class Unfs:
-    def __init__(self, unfs_path, mount_dir, address='127.0.0.1'):
+    def __init__(self, unfs_path, mount_dir):
         self.unfs = None
         self.unfs_path = unfs_path
         self.mount_dir = mount_dir
         self.exports = self._create_exports()
-        self.address = address
 
     def _create_exports(self):
         options = [
@@ -37,7 +36,6 @@ class Unfs:
             '-d',
             '-p',
             '-e', self.exports,
-            '-l', self.address,
             '-n', str(nfsport),
             '-m', str(mountport)
         ]
