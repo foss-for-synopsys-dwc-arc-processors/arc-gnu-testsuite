@@ -1,16 +1,16 @@
-from pexpect import pxssh
+from pexpect import pxssh, ExceptionPexpect
 
 
 class SSHConnectionError(Exception):
     pass
 
 
-class SSHConnectionProcessError(Exception):
+class SSHConnectionProcessError(SSHConnectionError):
     def __init__(self, cmd):
         self.cmd = cmd
 
     def __str__(self):
-        return f'Command {self.cmd} failed'
+        return f'Command: \'{self.cmd}\' failed'
 
 
 class SSHConnection:
@@ -30,18 +30,24 @@ class SSHConnection:
                            password=password,
                            login_timeout=120,
                            port=port)
-        except pxssh.ExceptionPxssh as err:
+        except ExceptionPexpect as err:
             raise SSHConnectionError(err)
 
-    def run(self, cmd, check=True):
+    def run(self, cmd, timeout=-1, check=True):
         try:
             self.ssh.sendline(cmd)
-            self.ssh.prompt()
+            self.ssh.prompt(timeout=timeout)
+            output = self.ssh.before.decode().splitlines()[1:]
             self.ssh.sendline('echo $?')
-            self.ssh.prompt()
+            self.ssh.prompt(timeout=timeout)
             result = self.ssh.before.decode().strip().splitlines()
-            exitcode = int(result[-1])
+            try:
+                exitcode = int(result[-1])
+            except ValueError:
+                exitcode = 1
+
             if check and exitcode:
                 raise SSHConnectionProcessError(cmd)
-        except pxssh.ExceptionPxssh:
+            return output, exitcode
+        except ExceptionPexpect:
             raise SSHConnectionProcessError(cmd)
