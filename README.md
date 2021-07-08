@@ -65,43 +65,46 @@ export CXXFLAGS="-mcpu=hs38 -O2"
 Run the following command to execute Glibc testing for `arhs` target:
 
 ```sh
-./run_glibc_testsuite.py --qemu <qemu path> --toolchain-path <toolchain path> --toolchain-prefix=arc-linux-gnu --kernel <vmlinux path> --glibc-dir <glibc dir> --linux-headers-dir <linux headers dir> --unfs <unfsd path>
+./run_glibc_testsuite.py --cpu archs ---qemu <qemu path> --toolchain-path <toolchain path> --toolchain-prefix=arc-linux-gnu --kernel <vmlinux path> --glibc-dir <glibc dir> --linux-headers-dir <linux headers dir> --unfs <unfsd path>
 ```
 
 ## Usage
 
 ```sh
-usage: run_glibc_testsuite.py [-h] [--cpu CPU] [--toolchain-prefix TOOLCHAIN_PREFIX] [--qemu-path QEMU_PATH] [--ssh-host SSH_HOST] [--ssh-port SSH_PORT] --kernel KERNEL [--toolchain-path TOOLCHAIN_PATH] [--linux-headers-dir LINUX_HEADERS_DIR] [--linux-headers-version LINUX_HEADERS_VERSION] [--timeoutfactor TIMEOUTFACTOR] [--build-jobs BUILD_JOBS]
-                              [--test-jobs TEST_JOBS] --glibc-dir GLIBC_DIR [--subdir SUBDIR] [--cflags CFLAGS] [--cxxflags CXXFLAGS] [--unfs UNFS] [--allow-time-setting] [--build] [--check] [--xcheck]
+usage: run_glibc_testsuite.py [-h] [--cpu CPU] --toolchain-prefix TOOLCHAIN_PREFIX --toolchain-path TOOLCHAIN_PATH --glibc-dir GLIBC_DIR [--kernel KERNEL] --linux-headers-dir LINUX_HEADERS_DIR [--linux-headers-version LINUX_HEADERS_VERSION] [--qemu-path QEMU_PATH] [--unfs UNFS] [--ssh-host SSH_HOST] [--ssh-port SSH_PORT] [--server-ip SERVER_IP]
+                              [--timeoutfactor TIMEOUTFACTOR] [--build-jobs BUILD_JOBS] [--test-jobs TEST_JOBS] [--subdir SUBDIR] [--verbose] [--cflags CFLAGS] [--cxxflags CXXFLAGS] [--allow-time-setting] [--build] [--check] [--xcheck]
 
 optional arguments:
   -h, --help            show this help message and exit
-  --cpu CPU             processor to emulate(hs6x)
+  --cpu CPU             processor to emulate
   --toolchain-prefix TOOLCHAIN_PREFIX
-                        toolchain prefix(arc64-linux-gnu)
-  --qemu-path QEMU_PATH
-                        path to QEMU emulator
-  --ssh-host SSH_HOST   target ssh hostname(127.0.0.1)
-  --ssh-port SSH_PORT   target ssh port(22)
-  --kernel KERNEL       path to kernel(vmlinux)
+                        toolchain prefix
   --toolchain-path TOOLCHAIN_PATH
                         path to toolchain
+  --glibc-dir GLIBC_DIR
+                        path to glibc directory
+  --kernel KERNEL       path to kernel
   --linux-headers-dir LINUX_HEADERS_DIR
                         path to linux headers
   --linux-headers-version LINUX_HEADERS_VERSION
                         linux headers version
+  --qemu-path QEMU_PATH
+                        path to QEMU emulator
+  --unfs UNFS           Path to unfs3(optional)
+  --ssh-host SSH_HOST   target ssh hostname(127.0.0.1)
+  --ssh-port SSH_PORT   target ssh port(22)
+  --server-ip SERVER_IP
+                        NFS server IP address
   --timeoutfactor TIMEOUTFACTOR
                         TIMEOUTAFACTOR on the remote machine(600)
   --build-jobs BUILD_JOBS
                         number of jobs to build tests(8)
   --test-jobs TEST_JOBS
                         number of jobs to run tests(1)
-  --glibc-dir GLIBC_DIR
-                        path to glibc directory
   --subdir SUBDIR       testing only a subset of tests(optional)
+  --verbose             enable verbose output
   --cflags CFLAGS       CFLAGS options(-O2)
   --cxxflags CXXFLAGS   CXXFLAGS options(-O2)
-  --unfs UNFS           Path to unfs3(optional)
   --allow-time-setting  set GLIBC_TEST_ALLOW_TIME_SETTING env variable
   --build               run build
   --check               run tests
