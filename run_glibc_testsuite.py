@@ -3,11 +3,9 @@
 import argparse
 import multiprocessing
 import os
-import subprocess
 import sys
 
-from testsuite.glibctestsuite import GlibcTestSuite
-from utils.qemurunner import QemuProcessError
+from testsuite.glibctestsuite import GlibcTestSuite, GlibcTestSuiteError
 
 
 def dir_path(path):
@@ -26,21 +24,47 @@ def file_path(path):
 def parse_arguments():
     parser = argparse.ArgumentParser()
 
-    cpu = 'hs6x'
     parser.add_argument('--cpu',
                         type=str,
-                        default=cpu,
-                        help=f'processor to emulate({cpu})')
+                        help=f'processor to emulate')
 
-    toolchain_prefix = '{}-linux-gnu'.format(os.environ.get('ARCH', 'arc64'))
     parser.add_argument('--toolchain-prefix',
                         type=str,
-                        default=toolchain_prefix,
-                        help=f'toolchain prefix({toolchain_prefix})')
+                        required=True,
+                        help=f'toolchain prefix')
+
+    parser.add_argument('--toolchain-path',
+                        type=dir_path,
+                        required=True,
+                        help=f'path to toolchain')
+
+    parser.add_argument('--glibc-dir',
+                        type=dir_path,
+                        required=True,
+                        help='path to glibc directory')
+
+    parser.add_argument('--kernel',
+                        type=file_path,
+                        default=os.environ.get('KERNEL_PATH', None),
+                        help=f'path to kernel')
+
+    parser.add_argument('--linux-headers-dir',
+                        type=dir_path,
+                        required=True,
+                        help='path to linux headers')
+
+    parser.add_argument('--linux-headers-version',
+                        type=str,
+                        default=os.environ.get('LINUX_HEADERS_VERSION'),
+                        help='linux headers version')
 
     parser.add_argument('--qemu-path',
                         type=file_path,
                         help='path to QEMU emulator')
+
+    parser.add_argument('--unfs',
+                        type=file_path,
+                        help='Path to unfs3(optional)')
 
     ssh_hostname = '127.0.0.1'
     parser.add_argument('--ssh-host',
@@ -52,27 +76,9 @@ def parse_arguments():
                         type=int,
                         help=f'target ssh port(22)')
 
-    kernel = 'vmlinux'
-    parser.add_argument('--kernel',
-                        type=file_path,
-                        required=True,
-                        default=os.environ.get('KERNEL_PATH', kernel),
-                        help=f'path to kernel({kernel})')
-
-    parser.add_argument('--toolchain-path',
-                        type=dir_path,
-                        required=True,
-                        help=f'path to toolchain')
-
-    parser.add_argument('--linux-headers-dir',
-                        type=dir_path,
-                        help='path to linux headers')
-
-    parser.add_argument('--linux-headers-version',
+    parser.add_argument('--server-ip',
                         type=str,
-                        default=os.environ.get('LINUX_HEADERS_VERSION'),
-                        help='linux headers version')
-
+                        help=f'NFS server IP address')
     timeout = 600
     parser.add_argument('--timeoutfactor',
                         type=int,
@@ -90,14 +96,13 @@ def parse_arguments():
                         default=1,
                         help='number of jobs to run tests(1)')
 
-    parser.add_argument('--glibc-dir',
-                        type=dir_path,
-                        required=True,
-                        help='path to glibc directory')
-
     parser.add_argument('--subdir',
                         type=str,
                         help='testing only a subset of tests(optional)')
+
+    parser.add_argument('--verbose',
+                        help='enable verbose output',
+                        action='store_true')
 
     build_flags = '-O2'
     parser.add_argument('--cflags',
@@ -109,10 +114,6 @@ def parse_arguments():
                         type=str,
                         default=os.environ.get('CXXFLAGS', build_flags),
                         help=f'CXXFLAGS options({build_flags})')
-
-    parser.add_argument('--unfs',
-                        type=file_path,
-                        help='Path to unfs3(optional)')
 
     parser.add_argument('--allow-time-setting',
                         help='set GLIBC_TEST_ALLOW_TIME_SETTING env variable',
@@ -157,40 +158,40 @@ def main():
     if not run_build and not run_check and not run_xcheck:
         run_build = run_check = run_xcheck = True
 
-    testsuite = GlibcTestSuite(args.cpu,
-                               args.toolchain_prefix,
-                               args.allow_time_setting,
-                               args.timeoutfactor,
-                               args.glibc_dir,
-                               args.qemu_path,
-                               args.kernel,
-                               args.unfs,
-                               args.build_jobs,
-                               args.test_jobs,
-                               args.linux_headers_dir,
-                               args.linux_headers_version,
-                               args.toolchain_path,
-                               args.ssh_host,
-                               args.ssh_port,
-                               args.subdir,
-                               run_check,
-                               run_xcheck,
-                               env)
+    try:
+        testsuite = GlibcTestSuite(args.cpu,
+                                   args.toolchain_prefix,
+                                   args.allow_time_setting,
+                                   args.timeoutfactor,
+                                   args.glibc_dir,
+                                   args.qemu_path,
+                                   args.kernel,
+                                   args.unfs,
+                                   args.build_jobs,
+                                   args.test_jobs,
+                                   args.linux_headers_dir,
+                                   args.linux_headers_version,
+                                   args.toolchain_path,
+                                   args.ssh_host,
+                                   args.ssh_port,
+                                   args.server_ip,
+                                   args.subdir,
+                                   args.verbose,
+                                   run_check,
+                                   run_xcheck,
+                                   env)
 
-    if run_build:
-        try:
+        if run_build:
             testsuite.configure()
             testsuite.build()
             testsuite.install()
-        except subprocess.CalledProcessError as ex:
-            sys.exit(ex.returncode)
 
-    if run_check or run_xcheck:
-        try:
+        if run_check or run_xcheck:
             testsuite.run()
-        except (QemuProcessError, SystemError) as ex:
-            print(f'ERROR: {ex}')
-            sys.exit(1)
+
+    except GlibcTestSuiteError as err:
+        print(f'ERROR: {err}')
+    sys.exit(1)
 
 
 if __name__ == '__main__':

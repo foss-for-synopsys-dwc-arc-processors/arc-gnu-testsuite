@@ -1,4 +1,6 @@
 import os
+import socket
+import subprocess
 import tempfile
 from shutil import copyfile
 
@@ -7,6 +9,10 @@ from utils import run_command, mkdir, get_free_port
 from utils.qemurunner import QemuRunner, QemuProcessError
 from utils.ssh import SSHConnection, SSHConnectionError
 from utils.unfs import Unfs
+
+
+class GlibcTestSuiteError(Exception):
+    pass
 
 
 class GlibcTestSuite:
@@ -26,7 +32,9 @@ class GlibcTestSuite:
                  toolchain_path=None,
                  ssh_host=None,
                  ssh_port=None,
+                 server_ip=None,
                  subdir=None,
+                 verbose=False,
                  run_check=True,
                  run_xcheck=True,
                  env=None
@@ -41,7 +49,6 @@ class GlibcTestSuite:
         self.install_dir = os.path.join(self.build_dir, 'install')
         self.qemu = None
         self.qemu_path = None
-        self.kernel_path = os.path.realpath(kernel_path)
         self.unfs = None
         self.unfs_path = None
         self.build_jobs = build_jobs
@@ -51,14 +58,26 @@ class GlibcTestSuite:
         self.toolchain_path = toolchain_path
         self.ssh_host = ssh_host
         self.ssh_port = get_free_port() if ssh_port is None else ssh_port
+        self.server_ip = '10.0.2.2' if qemu_path else server_ip
         self.subdir = subdir
+        self.verbose = verbose
         self.env = env
 
-        if unfs_path is not None:
+        if qemu_path:
+            self.qemu_path = os.path.realpath(qemu_path)
+            if kernel_path is None:
+                raise GlibcTestSuiteError('Please, specify kernel path')
+            if cpu is None:
+                raise GlibcTestSuiteError('Please, specify cpu to emulate')
+
+        if kernel_path:
+            self.kernel_path = os.path.realpath(kernel_path)
+
+        if unfs_path:
             self.unfs_path = os.path.realpath(unfs_path)
 
-        if qemu_path is not None:
-            self.qemu_path = os.path.realpath(qemu_path)
+        if self.server_ip is None:
+            self.server_ip = self._host_ip_address()
 
         self.make_options = []
         if run_check:
@@ -66,20 +85,28 @@ class GlibcTestSuite:
         if run_xcheck:
             self.make_options.append('xcheck')
 
-    def _copy_libgcc_s(self):
+    def _install_library(self, library_name):
         if self.toolchain_path is None:
             return
 
-        libgcc_s_name = 'libgcc_s.so.1'
-        libgcc_s_path = utils.find_file(libgcc_s_name, self.toolchain_path)
-        if libgcc_s_path:
-            copyfile(libgcc_s_path,
-                     os.path.join(self.install_dir, 'lib', libgcc_s_name),
+        library_path = utils.find_file(library_name, self.toolchain_path)
+        if library_path:
+            copyfile(library_path,
+                     os.path.join(self.install_dir, 'lib', library_name),
                      follow_symlinks=True)
 
+    def _host_ip_address(self):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.connect((self.ssh_host, self.ssh_port))
+            address = sock.getsockname()[0]
+            sock.close()
+            return address
+        except socket.error as err:
+            raise GlibcTestSuiteError(f'Failed to get server IP: {err}')
+
     def _run_nfs_server(self):
-        address = '127.0.0.1' if self.ssh_host == '127.0.0.1' else '0.0.0.0'
-        self.unfs = Unfs(self.unfs_path, self.glibc_dir, address)
+        self.unfs = Unfs(self.unfs_path, self.glibc_dir)
         return self.unfs.serve()
 
     def _run_qemu(self):
@@ -97,22 +124,23 @@ class GlibcTestSuite:
             self.qemu.boot(kernel=self.kernel_path, options=qemu_option)
             self.qemu.login()
         except QemuProcessError as err:
-            raise SystemError(f'Failed to boot QEMU: {err}\n'
-                              f'Please, see the log file: '
-                              f'{self.qemu.log_path}')
+            raise GlibcTestSuiteError(f'Failed to boot QEMU: {err}\n'
+                                      f'Please, see the log file: '
+                                      f'{self.qemu.log_path}')
 
     def _mount_nfs(self, mount_dir, nfsport, mountport):
         try:
+            timeout = 30
             ssh = SSHConnection(hostname=self.ssh_host, port=self.ssh_port)
-            ssh.run(f'mkdir -p {mount_dir}')
+            ssh.run(f'mkdir -p {mount_dir}', timeout=timeout)
             mount_args = [
                 f'mount', '-o',
                 f'noac,nolock,nfsvers=3,port={nfsport},mountport={mountport}',
-                f'10.0.2.2:{mount_dir}', mount_dir
+                f'{self.server_ip}:{mount_dir}', mount_dir
             ]
-            ssh.run(' '.join(mount_args))
+            ssh.run(' '.join(mount_args), timeout=timeout)
         except SSHConnectionError as err:
-            raise SystemError(f'Failed to mount NFS mount: {err}')
+            raise GlibcTestSuiteError(f'Failed to mount NFS mount: {err}')
 
     def _create_ssh_wrapper(self):
         command = [
@@ -138,7 +166,7 @@ class GlibcTestSuite:
             os.path.join(self.glibc_dir, 'scripts', 'cross-test-ssh.sh'),
             '--ssh', ssh_cmd,
             '--timeoutfactor', str(self.timeoutfactor),
-            'root@localhost'
+            f'root@{self.ssh_host}'
         ]
 
         if self.allow_time_setting:
@@ -146,10 +174,17 @@ class GlibcTestSuite:
 
         return command
 
+    def _run_make(self, args):
+        make_command = 'make {}'.format(' '.join(args))
+        return run_command(args=make_command,
+                           cwd=self.build_dir,
+                           env=self.env,
+                           shell=True,
+                           verbose=self.verbose)
+
     def _run_tests(self, test_wrapper_cmd):
         for option in self.make_options:
             make_args = [
-                'make',
                 '-i',
                 'test-wrapper=\'{}\''.format(' '.join(test_wrapper_cmd)),
                 f'PARALLELMFLAGS=-j{self.test_jobs}',
@@ -159,8 +194,7 @@ class GlibcTestSuite:
             if self.subdir:
                 make_args.append(f'subdirs={self.subdir}')
 
-            run_command(' '.join(make_args), cwd=self.build_dir, shell=True,
-                        env=self.env)
+            self._run_make(make_args)
 
     def configure(self):
         args = [
@@ -181,23 +215,28 @@ class GlibcTestSuite:
             args.append(f'--enable-kernel={self.linux_headers_version}')
 
         mkdir(self.build_dir)
-        run_command(args=args, cwd=self.build_dir, env=self.env, verbose=False)
+        try:
+            run_command(args=args,
+                        cwd=self.build_dir,
+                        env=self.env,
+                        verbose=self.verbose)
+        except subprocess.CalledProcessError as err:
+            raise GlibcTestSuiteError(err)
 
     def build(self):
-        make_args = [
-            'make',
-            f'PARALLELMFLAGS=-j{self.build_jobs}'
-        ]
-
-        run_command(make_args, cwd=self.build_dir, env=self.env, verbose=False)
+        try:
+            self._run_make([f'PARALLELMFLAGS=-j{self.build_jobs}'])
+        except subprocess.CalledProcessError as err:
+            raise GlibcTestSuiteError(err)
 
     def install(self):
-        make_args = [
-            'make',
-            'install'
-        ]
-        run_command(make_args, cwd=self.build_dir, env=self.env, verbose=False)
-        self._copy_libgcc_s()
+        try:
+            self._run_make(['install'])
+
+            for library in ['libgcc_s.so.1', 'libstdc++.so.6']:
+                self._install_library(library)
+        except subprocess.CalledProcessError as err:
+            raise GlibcTestSuiteError(err)
 
     def run(self):
         ssh_cmd = ''
