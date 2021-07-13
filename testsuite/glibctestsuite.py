@@ -2,11 +2,13 @@ import os
 import socket
 import subprocess
 import tempfile
+from emulators.emulator import EmulatorError
+from emulators.nsim import NsimEmulator
+from emulators.qemu import QemuEmulator
 from shutil import copyfile
 
 import utils
 from utils import run_command, mkdir, get_free_port
-from utils.qemurunner import QemuRunner, QemuProcessError
 from utils.ssh import SSHConnection, SSHConnectionError
 from utils.unfs import Unfs
 
@@ -17,22 +19,25 @@ class GlibcTestSuiteError(Exception):
 
 class GlibcTestSuite:
     def __init__(self,
-                 cpu,
                  toolchain_prefix,
                  allow_time_setting,
                  timeoutfactor,
                  glibc_dir,
-                 qemu_path,
                  kernel_path,
-                 unfs_path,
-                 build_jobs,
-                 test_jobs,
+                 unfs_path=None,
+                 cpu=None,
+                 qemu_path=None,
+                 nsim_path=None,
+                 nsim_propsfile=None,
+                 nsim_ifname=None,
+                 build_jobs=1,
+                 test_jobs=1,
                  linux_headers_dir=None,
                  linux_headers_version=None,
                  toolchain_path=None,
                  ssh_host=None,
                  ssh_port=None,
-                 server_ip=None,
+                 nfs_server_ip=None,
                  subdir=None,
                  verbose=False,
                  run_check=True,
@@ -47,8 +52,11 @@ class GlibcTestSuite:
         self.glibc_dir = os.path.realpath(glibc_dir)
         self.build_dir = os.path.join(self.glibc_dir, 'build')
         self.install_dir = os.path.join(self.build_dir, 'install')
-        self.qemu = None
-        self.qemu_path = None
+        self.emulator = None
+        self.qemu_path = qemu_path
+        self.nsim_path = nsim_path
+        self.nsim_propsfile = nsim_propsfile
+        self.nsim_ifname = nsim_ifname
         self.unfs = None
         self.unfs_path = None
         self.build_jobs = build_jobs
@@ -57,11 +65,15 @@ class GlibcTestSuite:
         self.linux_headers_version = linux_headers_version
         self.toolchain_path = toolchain_path
         self.ssh_host = ssh_host
-        self.ssh_port = get_free_port() if ssh_port is None else ssh_port
-        self.server_ip = '10.0.2.2' if qemu_path else server_ip
+        self.ssh_port = 22 if ssh_port is None else ssh_port
+        self.nfs_server_ip = nfs_server_ip
         self.subdir = subdir
         self.verbose = verbose
         self.env = env
+
+        if qemu_path and (nsim_propsfile or nsim_ifname):
+            raise GlibcTestSuiteError(
+                'Only one emulator can be executed at the same time')
 
         if qemu_path:
             self.qemu_path = os.path.realpath(qemu_path)
@@ -69,6 +81,13 @@ class GlibcTestSuite:
                 raise GlibcTestSuiteError('Please, specify kernel path')
             if cpu is None:
                 raise GlibcTestSuiteError('Please, specify cpu to emulate')
+            if ssh_port is None:
+                self.ssh_port = get_free_port()
+            if nfs_server_ip is None:
+                self.nfs_server_ip = '10.0.2.2'
+
+        if nsim_propsfile:
+            self.nsim_propsfile = os.path.realpath(nsim_propsfile)
 
         if kernel_path:
             self.kernel_path = os.path.realpath(kernel_path)
@@ -76,8 +95,8 @@ class GlibcTestSuite:
         if unfs_path:
             self.unfs_path = os.path.realpath(unfs_path)
 
-        if self.server_ip is None:
-            self.server_ip = self._host_ip_address()
+        if self.nfs_server_ip is None:
+            self.nfs_server_ip = self._host_ip_address()
 
         self.make_options = []
         if run_check:
@@ -109,24 +128,48 @@ class GlibcTestSuite:
         self.unfs = Unfs(self.unfs_path, self.glibc_dir)
         return self.unfs.serve()
 
+    def _setup_nsim_network(self):
+        netmask = utils.get_netmask(self.nsim_ifname)
+        self.emulator.run(f'ip a add {self.ssh_host}/{netmask} dev eth0')
+        self.emulator.run('ip l set up dev eth0')
+
     def _run_qemu(self):
-        qemu_option = [
+        qemu_options = [
             '-cpu', self.cpu,
             '-netdev', f'user,id=net0,hostfwd=tcp::{self.ssh_port}-:22',
             '-device', 'virtio-net-device,netdev=net0',
             '--global', 'cpu.freq_hz=50000000'
         ]
 
-        qemu_log = os.path.join('/tmp', f'qemu-{utils.timestamp()}.log')
+        qemu_log = os.path.join(self.build_dir, f'qemu-{utils.timestamp()}.log')
 
         try:
-            self.qemu = QemuRunner(self.qemu_path, log_path=qemu_log)
-            self.qemu.boot(kernel=self.kernel_path, options=qemu_option)
-            self.qemu.login()
-        except QemuProcessError as err:
-            raise GlibcTestSuiteError(f'Failed to boot QEMU: {err}\n'
-                                      f'Please, see the log file: '
-                                      f'{self.qemu.log_path}')
+            self.emulator = QemuEmulator(qemu_path=self.qemu_path,
+                                         options=qemu_options,
+                                         kernel=self.kernel_path,
+                                         log_path=qemu_log)
+            self.emulator.login()
+        except EmulatorError as err:
+            raise GlibcTestSuiteError(err)
+
+    def _run_nsim(self):
+        nsim_options = [
+            f'nsim_mem-dev=virt-net,start=0xf0108000,end=0xf010a000,irq=35,tap={self.nsim_ifname}'
+        ]
+
+        nsim_log = os.path.join(self.build_dir, f'nsim-{utils.timestamp()}.log')
+
+        try:
+            self.emulator = NsimEmulator(nsim_path=self.nsim_path,
+                                         kernel=self.kernel_path,
+                                         props=nsim_options,
+                                         propsfile=self.nsim_propsfile,
+                                         log_path=nsim_log)
+            self.emulator.login()
+            if self.nsim_ifname:
+                self._setup_nsim_network()
+        except EmulatorError as err:
+            raise GlibcTestSuiteError(err)
 
     def _mount_nfs(self, mount_dir, nfsport, mountport):
         try:
@@ -136,7 +179,7 @@ class GlibcTestSuite:
             mount_args = [
                 f'mount', '-o',
                 f'noac,nolock,nfsvers=3,port={nfsport},mountport={mountport}',
-                f'{self.server_ip}:{mount_dir}', mount_dir
+                f'{self.nfs_server_ip}:{mount_dir}', mount_dir
             ]
             ssh.run(' '.join(mount_args), timeout=timeout)
         except SSHConnectionError as err:
@@ -247,6 +290,9 @@ class GlibcTestSuite:
 
             if self.qemu_path:
                 self._run_qemu()
+
+            if self.nsim_propsfile:
+                self._run_nsim()
 
             self._mount_nfs(self.glibc_dir, nfsport, mountport)
             ssh_cmd = self._create_ssh_wrapper()

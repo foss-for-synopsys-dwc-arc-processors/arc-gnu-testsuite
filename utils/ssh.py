@@ -23,8 +23,8 @@ class SSHConnection:
             "StrictHostKeyChecking": "no",
             "UserKnownHostsFile": "/dev/null"
         }
-        self.ssh = pxssh.pxssh(options=options)
         try:
+            self.ssh = pxssh.pxssh(options=options)
             self.ssh.login(server=hostname,
                            username=username,
                            password=password,

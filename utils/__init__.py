@@ -1,5 +1,7 @@
+import fcntl
 import os
 import socket
+import struct
 import subprocess
 import sys
 from datetime import datetime
@@ -13,6 +15,13 @@ def get_free_port(udp=False):
     address = sock.getsockname()
     sock.close()
     return address[1]
+
+
+def get_netmask(ifname):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(
+        fcntl.ioctl(sock.fileno(), 0x891b, struct.pack('256s', ifname[:15].encode('utf-8')))[
+        20:24])
 
 
 def mkdir(path):
