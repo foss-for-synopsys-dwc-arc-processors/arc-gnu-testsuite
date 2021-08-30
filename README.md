@@ -103,7 +103,7 @@ export CXXFLAGS="-mcpu=hs38 -O2"
 ## Usage
 
 ```sh
-usage: run_glibc_testsuite.py [-h] --toolchain-prefix TOOLCHAIN_PREFIX --toolchain-path TOOLCHAIN_PATH --glibc-dir GLIBC_DIR --linux-headers-dir LINUX_HEADERS_DIR [--linux-headers-version LINUX_HEADERS_VERSION] [--kernel KERNEL] [--cpu CPU] [--qemu-path QEMU_PATH] [--nsim-path NSIM_PATH] [--nsim-propsfile NSIM_PROPSFILE] [--nsim-ifname NSIM_IFNAME] [--build-jobs BUILD_JOBS]
+usage: run_glibc_testsuite.py [-h] --toolchain-prefix TOOLCHAIN_PREFIX --toolchain-path TOOLCHAIN_PATH --glibc-dir GLIBC_DIR --linux-headers-dir LINUX_HEADERS_DIR [--linux-headers-version LINUX_HEADERS_VERSION] [--kernel KERNEL] [--cpu CPU] [--qemu-path QEMU_PATH] [--qemu-extra-opts QEMU_EXTRA_OPTS] [--nsim-path NSIM_PATH] [--nsim-propsfile NSIM_PROPSFILE] [--nsim-ifname NSIM_IFNAME] [--build-jobs BUILD_JOBS]
                               [--cflags CFLAGS] [--cxxflags CXXFLAGS] [--ssh-host SSH_HOST] [--ssh-port SSH_PORT] [--unfs UNFS] [--nfs-server-ip NFS_SERVER_IP] [--timeoutfactor TIMEOUTFACTOR] [--test-jobs TEST_JOBS] [--subdir SUBDIR] [--allow-time-setting] [--build-only | --check-only | --xcheck-only] [--verbose]
 
 optional arguments:
@@ -130,6 +130,8 @@ QEMU options:
   --cpu CPU             processor to emulate
   --qemu-path QEMU_PATH
                         path to QEMU emulator
+  --qemu-extra-opts QEMU_EXTRA_OPTS
+                        additional QEMU options
 
 nSIM options:
   --nsim-path NSIM_PATH

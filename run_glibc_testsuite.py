@@ -64,6 +64,10 @@ def parse_arguments():
                        type=file_path,
                        help='path to QEMU emulator')
 
+    group.add_argument('--qemu-extra-opts',
+                       type=str,
+                       help='additional QEMU options')
+
     group = parser.add_argument_group('nSIM options')
     group.add_argument('--nsim-path',
                        type=file_path,
@@ -186,6 +190,7 @@ def main():
                                    args.unfs,
                                    args.cpu,
                                    args.qemu_path,
+                                   args.qemu_extra_opts.split(' '),
                                    args.nsim_path,
                                    args.nsim_propsfile,
                                    args.nsim_ifname,

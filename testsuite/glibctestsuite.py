@@ -27,6 +27,7 @@ class GlibcTestSuite:
                  unfs_path=None,
                  cpu=None,
                  qemu_path=None,
+                 qemu_extra_opts=None,
                  nsim_path=None,
                  nsim_propsfile=None,
                  nsim_ifname=None,
@@ -54,6 +55,7 @@ class GlibcTestSuite:
         self.install_dir = os.path.join(self.build_dir, 'install')
         self.emulator = None
         self.qemu_path = qemu_path
+        self.qemu_extra_opts = qemu_extra_opts
         self.nsim_path = nsim_path
         self.nsim_propsfile = nsim_propsfile
         self.nsim_ifname = nsim_ifname
@@ -140,6 +142,9 @@ class GlibcTestSuite:
             '-device', 'virtio-net-device,netdev=net0',
             '--global', 'cpu.freq_hz=50000000'
         ]
+
+        if self.qemu_extra_opts:
+            qemu_options += self.qemu_extra_opts
 
         qemu_log = os.path.join(self.build_dir, f'qemu-{utils.timestamp()}.log')
 
