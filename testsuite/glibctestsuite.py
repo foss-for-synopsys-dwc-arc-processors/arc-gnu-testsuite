@@ -144,7 +144,7 @@ class GlibcTestSuite:
         ]
 
         if self.qemu_extra_opts:
-            qemu_options += self.qemu_extra_opts
+            qemu_options += self.qemu_extra_opts.split (' ')
 
         qemu_log = os.path.join(self.build_dir, f'qemu-{utils.timestamp()}.log')
 

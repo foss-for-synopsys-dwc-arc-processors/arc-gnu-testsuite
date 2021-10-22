@@ -190,7 +190,7 @@ def main():
                                    args.unfs,
                                    args.cpu,
                                    args.qemu_path,
-                                   args.qemu_extra_opts.split(' '),
+                                   args.qemu_extra_opts,
                                    args.nsim_path,
                                    args.nsim_propsfile,
                                    args.nsim_ifname,
