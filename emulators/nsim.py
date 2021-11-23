@@ -12,9 +12,10 @@ class NsimEmulator(Emulator):
                  log_path: Optional[str] = None):
 
         if nsim_path is None:
-            command = which('nsimdrv')
-        if command is None:
-            raise EmulatorError('nSIM emulator was not found')
+            nsim_path = which('nsimdrv')
+            if nsim_path is None:
+                raise EmulatorError('nSIM emulator was not found')
+
         args = []
 
         if props:
@@ -27,7 +28,7 @@ class NsimEmulator(Emulator):
         if kernel:
             args += [kernel]
 
-        super().__init__(command=command, args=args, log_path=log_path)
+        super().__init__(command=nsim_path, args=args, log_path=log_path)
 
     @classmethod
     def name(cls) -> str:
