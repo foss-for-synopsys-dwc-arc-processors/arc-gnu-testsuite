@@ -1,13 +1,13 @@
+import logging
 import os
 import socket
 import subprocess
 import tempfile
+import utils
 from emulators.emulator import EmulatorError
 from emulators.nsim import NsimEmulator
 from emulators.qemu import QemuEmulator
 from shutil import copyfile
-
-import utils
 from utils import run_command, mkdir, get_free_port
 from utils.ssh import SSHConnection, SSHConnectionError
 from utils.unfs import Unfs
@@ -144,7 +144,7 @@ class GlibcTestSuite:
         ]
 
         if self.qemu_extra_opts:
-            qemu_options += self.qemu_extra_opts.split (' ')
+            qemu_options += self.qemu_extra_opts.split(' ')
 
         qemu_log = os.path.join(self.build_dir, f'qemu-{utils.timestamp()}.log')
 
@@ -178,7 +178,8 @@ class GlibcTestSuite:
 
     def _mount_nfs(self, mount_dir, nfsport, mountport):
         try:
-            timeout = 30
+            timeout = 300
+            logging.info('conneting to: %s:%s', self.ssh_host, self.ssh_port)
             ssh = SSHConnection(hostname=self.ssh_host, port=self.ssh_port)
             ssh.run(f'mkdir -p {mount_dir}', timeout=timeout)
             mount_args = [
@@ -186,6 +187,8 @@ class GlibcTestSuite:
                 f'noac,nolock,nfsvers=3,port={nfsport},mountport={mountport}',
                 f'{self.nfs_server_ip}:{mount_dir}', mount_dir
             ]
+            logging.info('mounting NFS share: %s', ' '.join(mount_args))
+
             ssh.run(' '.join(mount_args), timeout=timeout)
         except SSHConnectionError as err:
             raise GlibcTestSuiteError(f'Failed to mount NFS mount: {err}')

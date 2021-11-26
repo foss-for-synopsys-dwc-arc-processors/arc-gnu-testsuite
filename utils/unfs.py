@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 import tempfile
@@ -39,6 +40,8 @@ class Unfs:
             '-n', str(nfsport),
             '-m', str(mountport)
         ]
+
+        logging.info('starting unfs3  with: %s', ' '.join(args))
         self.unfs = subprocess.Popen(args,
                                      stdout=subprocess.DEVNULL,
                                      start_new_session=True)

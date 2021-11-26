@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import multiprocessing
 import os
 import sys
@@ -23,6 +24,8 @@ def file_path(path):
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
+    logging.basicConfig(stream=sys.stderr, format='%(levelname)s: %(message)s',
+                        level=logging.INFO)
 
     group = parser.add_argument_group('general options')
     group.add_argument('--toolchain-prefix',
@@ -217,7 +220,7 @@ def main():
             testsuite.run()
 
     except GlibcTestSuiteError as err:
-        print(f'ERROR: {err}')
+        logging.error(err)
         sys.exit(1)
 
 

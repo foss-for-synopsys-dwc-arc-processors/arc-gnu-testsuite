@@ -1,4 +1,5 @@
 import abc
+import logging
 import pexpect
 from abc import ABC
 from pexpect import ExceptionPexpect
@@ -25,10 +26,10 @@ class Emulator(ABC):
         self.prompt = prompt
         self.logfile = None
 
-        print(f"{self.name()} starting with: {command} {' '.join(args)}")
+        logging.info('%s starting with: %s %s', self.name(), self.command, ' '.join(args))
         if log_path:
             self.logfile = open(log_path, "w")
-            print(f'{self.name()} log will be saved: {log_path}')
+            logging.info('%s log will be saved: %s', self.name(), log_path)
 
         try:
             self.emulator = pexpect.spawn(self.command, self.args,
