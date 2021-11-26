@@ -20,8 +20,8 @@ def get_free_port(udp=False):
 def get_netmask(ifname):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     return socket.inet_ntoa(
-        fcntl.ioctl(sock.fileno(), 0x891b, struct.pack('256s', ifname[:15].encode('utf-8')))[
-        20:24])
+        fcntl.ioctl(sock.fileno(), 0x891b,
+                    struct.pack('256s', ifname[:15].encode('utf-8')))[20:24])
 
 
 def mkdir(path):
