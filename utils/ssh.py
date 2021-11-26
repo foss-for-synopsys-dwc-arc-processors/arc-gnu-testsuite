@@ -18,7 +18,8 @@ class SSHConnection:
                  hostname='127.0.0.1',
                  port=None,
                  username='root',
-                 password=None):
+                 password=None,
+                 timeout=300):
         options = {
             "StrictHostKeyChecking": "no",
             "UserKnownHostsFile": "/dev/null"
@@ -28,7 +29,7 @@ class SSHConnection:
             self.ssh.login(server=hostname,
                            username=username,
                            password=password,
-                           login_timeout=120,
+                           login_timeout=timeout,
                            port=port)
         except ExceptionPexpect as err:
             raise SSHConnectionError(err)
